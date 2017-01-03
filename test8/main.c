@@ -24,7 +24,7 @@ char lookahead;
 char* lexeme;
 int lexeme_len;
 
-char* binops = "+-*/%<>=!|&";
+char* binops = "+-*/\%<>=!|&";
 char* punc = "{}();,";
 char* keywords[] = { "if","else" };
 
