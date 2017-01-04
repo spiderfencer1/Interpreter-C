@@ -170,15 +170,153 @@ vec lex(striter buf) {
 	return tokens;
 }
 
+enum asttype {
+	A_NUM,
+	A_STR,
+	A_BOL,
+	A_VAR,
+	A_BLK,
+	A_IFS,
+	A_ASN,
+	A_BIN
+};
+
+typedef struct astnode {
+	enum asttype type;
+	union {
+		long numval;
+		char* strval;
+		int boolval;
+		char* name;
+		vec blockval;
+		struct ifstruct {
+			struct astnode* cond;
+			struct astnode* body;
+		}* ifval;
+		struct binstruct {
+			struct astnode* left;
+			struct astnode* right;
+			char* op;
+		}* binval;
+	};
+} astnode;
+
+typedef struct {
+	vec v;
+	int pos;
+} veciter;
+
+veciter* vinew(vec v) {
+	veciter* vi;
+	vi->v = vnew();
+	for (int i=0;i<v.len;i++) {
+		vadd(&(vi->v), vget(&v,i));
+	}
+	vi->pos = 0;
+	return vi;
+}
+
+void viadd(veciter* vi, void* v) {
+	vadd(&(vi->v), v);
+}
+
+void* viget(veciter* vi, int i) {
+	return vget(&(vi->v), vi->pos+i);
+}
+
+int viend(veciter* vi) {
+	return viget(vi, 0) == NULL;
+}
+
+astnode* parseAtom(veciter*);
+astnode* parseBinary(veciter*,astnode*,int);
+
+int prec(char* lexeme) {
+	return 1;
+}
+
+astnode* parseIf(veciter* tokiter) {
+	astnode* cond = parseBinary(tokiter, parseAtom(tokiter), 0);
+	astnode* body = parseBinary(tokiter, parseAtom(tokiter), 0);
+	astnode* ifs;
+	ifs->type = A_IFS;
+	ifs->ifval = (struct ifstruct*)(malloc(sizeof(struct ifstruct)));
+	ifs->ifval->cond = cond;
+	ifs->ifval->body = body;
+	return ifs;
+}
+
+astnode* parseAtom(veciter* tokiter) {
+	token* t = (token*)(viget(tokiter,0));
+	tokiter->pos++;
+	switch (t->type) {
+		case T_NUM:
+			{
+				astnode* n;
+				n->type = A_NUM;
+				n->numval = atol(t->lexeme);
+				return n;
+			}
+		case T_STR:
+			{
+				astnode* n;
+				n->type = A_STR;
+				n->strval = malloc(strlen(t->lexeme));
+				strcpy(n->strval,t->lexeme);
+				return n;
+			}
+		case T_BOL:
+			{
+				astnode* n;
+				n->type = A_BOL;
+				n->boolval = (strcmp(t->lexeme,"true") == 0);
+				return n;
+			}
+		case T_VAR:
+			{
+				if (strcmp(t->lexeme,"if") == 0) { return parseIf(tokiter); }
+				astnode* n;
+				n->type = A_VAR;
+				n->name = malloc(strlen(t->lexeme));
+				strcpy(n->name, t->lexeme);
+				return n;
+				break;
+			}
+		case T_PNC:
+			{
+				break;
+			}
+		default:
+			break;
+	}
+	fprintf(stderr, "%sError: cannot parse lexeme: %s.%s\n", "\x1b[31m", t->lexeme, "\x1b[0m");
+	exit(-1);
+}
+
+astnode* parseBinary(veciter* tokiter, astnode* left, int lastPrec) {
+	token* t = (token*)(viget(tokiter, 0));
+	if (t->type = T_BOP) {
+		if (prec(t->lexeme) > lastPrec) {
+			tokiter->pos++;
+			astnode* n;
+			n->type = (strcmp(t->lexeme,"=") == 0 ? A_ASN : A_BIN);
+			n->binval = malloc(sizeof(struct binstruct));
+			n->binval->left = left;
+			n->binval->right = parseBinary(tokiter, parseAtom(tokiter), prec(t->lexeme));
+			n->binval->op = malloc(strlen(t->lexeme));
+			strcpy(n->binval->op, t->lexeme);
+			return parseBinary(tokiter, n, lastPrec);
+		}
+	}
+	return left;
+}
+
 void parse(vec tokens) {
 	int pos = 0;
 	vec ast = vnew();
-	while (pos < tokens.len) {
-		token* t = (token*)(vget(&tokens,pos));
-		switch (t.type) {
-			case T_NUM:
-				vadd(&ast, )
-		}
+	veciter* tokiter = vinew(tokens);
+	while (!viend(tokiter)) {
+		viadd(tokiter, parseBinary(tokiter, parseAtom(tokiter), 0));
 	}
 }
 
